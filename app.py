@@ -466,25 +466,28 @@ def generate_proposal_docx(quote_data):
         if len(swmp_rows) > 4:
             cells = swmp_rows[4].getElementsByTagName('w:tc')
             if len(cells) >= 5:
-                set_cell_text(cells[4], f'${swmp_subtotal:,.0f}', align_right=True)  # Subtotal
-```
-
-### **What This Code Does**
-
-1. **Gets the prices** for Items 1A, 1B, and 1C (Permitting)
-   - If the item is checked and has a price, use it
-   - If not checked, use 0
-
-2. **Adds them together:**
-```
-   swmp_subtotal = price1A + price1B + permitting_price
-        
+                set_cell_text(cells[4], f'${swmp_subtotal:,.0f}', align_right=True)  # Subtotal   
       
-    # TABLE 3: Per-Inspection Pricing (Items 2A, 2B, Subtotal, Item 3 Flat Monthly)
+      # TABLE 3: Per-Inspection Pricing (Items 2A, 2B, Subtotal, Item 3 Flat Monthly)
         per_inspection_table = tables[2]
         per_inspection_rows = per_inspection_table.getElementsByTagName('w:tr')
         print(f"DEBUG: Table 3 (per-inspection) has {len(per_inspection_rows)} rows")
         
+        # Row 1 (2A): Routine Inspections
+        routine = services.get('routine', {})
+        if routine:
+            cells = per_inspection_rows[1].getElementsByTagName('w:tc')
+            if len(cells) >= 5:
+                set_cell_text(cells[2], routine.get('qty', ''), align_right=True)
+                set_cell_text(cells[3], f"${routine.get('rate', 0):,.0f}", align_right=True)
+                set_cell_text(cells[4], f"${routine.get('total', 0):,.0f}", align_right=True)
+        
+        # Row 2 (2B): Post-Storm Inspections
+        storm = services.get('postStorm', {})
+        if storm:
+            cells = per_inspection_rows[2].getElementsByTagName('w:tc')
+            if len(cells) >= 5:
+                set_cell_text(cells[2], storm.get('qty', ''), align_right=True)
                 set_cell_text(cells[3], f"${storm.get('rate', 0):,.0f}", align_right=True)
                 set_cell_text(cells[4], f"${storm.get('total', 0):,.0f}", align_right=True)
         
