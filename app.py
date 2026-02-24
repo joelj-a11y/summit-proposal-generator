@@ -371,7 +371,7 @@ def generate_proposal_docx(quote_data):
         print(f"DEBUG: Found {len(tables)} tables in template")
         
         if len(tables) < 8:
-    raise Exception(f"Template needs 8 tables, found only {len(tables)}")
+                raise Exception(f"Template needs 8 tables, found only {len(tables)}")
         
         # TABLE 1: Project Information (6 rows)
         info_table = tables[0]
@@ -456,6 +456,28 @@ def generate_proposal_docx(quote_data):
                     set_cell_text(cells[2], '1', align_right=True)  # Quantity - right aligned
                     set_cell_text(cells[3], f'${permitting_price:,.0f}', align_right=True)  # Rate - right aligned
                     set_cell_text(cells[4], f'${permitting_price:,.0f}', align_right=True)  # Total - right aligned
+
+        # Calculate and fill SWMP Subtotal (Row 4)
+        price1A = float(services.get('price1A', 0)) if services.get('include1A') and services.get('price1A') else 0
+        price1B = float(services.get('price1B', 0)) if services.get('include1B') and services.get('price1B') else 0
+        permitting_price = float(services.get('permittingPrice', 0)) if services.get('includePermitting') and services.get('permittingPrice') else 0
+        swmp_subtotal = price1A + price1B + permitting_price
+        
+        if len(swmp_rows) > 4:
+            cells = swmp_rows[4].getElementsByTagName('w:tc')
+            if len(cells) >= 5:
+                set_cell_text(cells[4], f'${swmp_subtotal:,.0f}', align_right=True)  # Subtotal
+```
+
+### **What This Code Does**
+
+1. **Gets the prices** for Items 1A, 1B, and 1C (Permitting)
+   - If the item is checked and has a price, use it
+   - If not checked, use 0
+
+2. **Adds them together:**
+```
+   swmp_subtotal = price1A + price1B + permitting_price
         
       
     # TABLE 3: Per-Inspection Pricing (Items 2A, 2B, Subtotal, Item 3 Flat Monthly)
@@ -463,21 +485,6 @@ def generate_proposal_docx(quote_data):
         per_inspection_rows = per_inspection_table.getElementsByTagName('w:tr')
         print(f"DEBUG: Table 3 (per-inspection) has {len(per_inspection_rows)} rows")
         
-        # Row 1 (2A): Routine Inspections
-        routine = services.get('routine', {})
-        if routine:
-            cells = per_inspection_rows[1].getElementsByTagName('w:tc')
-            if len(cells) >= 5:
-                set_cell_text(cells[2], routine.get('qty', ''), align_right=True)
-                set_cell_text(cells[3], f"${routine.get('rate', 0):,.0f}", align_right=True)
-                set_cell_text(cells[4], f"${routine.get('total', 0):,.0f}", align_right=True)
-        
-        # Row 2 (2B): Post-Storm Inspections
-        storm = services.get('postStorm', {})
-        if storm:
-            cells = per_inspection_rows[2].getElementsByTagName('w:tc')
-            if len(cells) >= 5:
-                set_cell_text(cells[2], storm.get('qty', ''), align_right=True)
                 set_cell_text(cells[3], f"${storm.get('rate', 0):,.0f}", align_right=True)
                 set_cell_text(cells[4], f"${storm.get('total', 0):,.0f}", align_right=True)
         
@@ -595,22 +602,42 @@ def generate_proposal_docx(quote_data):
         print(f"DEBUG: Option 2 Total (Flat Monthly): ${option2_total:,.0f}")
         print(f"DEBUG: Flat Monthly Rate: ${flat_monthly_rate:,.0f}/month × {int(construction_months)} months")
 
-# === END REPLACEMENT CODE ===
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Fill descriptions in SCOPE OF WORK DESCRIPTION section
+        all_paras = doc.getElementsByTagName('w:p')
+        
+        # Find the SCOPE OF WORK DESCRIPTION section
+        scope_para_index = None
+        for i, para in enumerate(all_paras):
+            texts = para.getElementsByTagName('w:t')
+            text_content = ''.join([t.firstChild.nodeValue if t.firstChild else '' for t in texts])
+            
+            if 'SCOPE OF WORK DESCRIPTION' in text_content:
+                scope_para_index = i
+                break
+        
+        if scope_para_index is not None:
+            # Collect all descriptions to add (only if they have content)
+            descriptions_to_add = []
+            
+            if services.get('include1A') and services.get('description1A'):
+                descriptions_to_add.append(('1.A', services.get('description1A')))
+            
+            if services.get('include1B') and services.get('description1B'):
+                descriptions_to_add.append(('1.B', services.get('description1B')))
+            
+            if services.get('includePermitting') and services.get('permittingDescription'):
+                descriptions_to_add.append(('1.C', services.get('permittingDescription')))
+            
+            # Only add Item 5 if scopeDescription5 is provided
+            if services.get('include5') and services.get('scopeDescription5'):
+                descriptions_to_add.append(('5', services.get('scopeDescription5')))
+            
+            # Only add Item 6 if scopeDescription6 is provided
+            if services.get('include6') and services.get('scopeDescription6'):
+                descriptions_to_add.append(('6', services.get('scopeDescription6')))
+            
+            # Add each description to consecutive paragraphs
+            for idx, (item_num, description) in enumerate(descriptions_to_add):
                 para_offset = scope_para_index + 1 + idx
                 if para_offset < len(all_paras):
                     target_para = all_paras[para_offset]
