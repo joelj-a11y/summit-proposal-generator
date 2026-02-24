@@ -351,7 +351,7 @@ def generate_proposal_docx(quote_data):
     
     try:
         # Check if template exists
-        template_path = 'Enhanced_Pricing_Template_v3.docx'
+        template_path = 'Summit_Proposal_Template.docx'
         if not os.path.exists(template_path):
             raise Exception("Template file not found. Please upload Enhanced_Pricing_Template_v3.docx to the repository.")
         
@@ -370,8 +370,8 @@ def generate_proposal_docx(quote_data):
         tables = doc.getElementsByTagName('w:tbl')
         print(f"DEBUG: Found {len(tables)} tables in template")
         
-        if len(tables) < 4:
-            raise Exception(f"Template needs at least 4 tables, found only {len(tables)}")
+        if len(tables) < 8:
+    raise Exception(f"Template needs 8 tables, found only {len(tables)}")
         
         # TABLE 1: Project Information (6 rows)
         info_table = tables[0]
@@ -457,26 +457,16 @@ def generate_proposal_docx(quote_data):
                     set_cell_text(cells[3], f'${permitting_price:,.0f}', align_right=True)  # Rate - right aligned
                     set_cell_text(cells[4], f'${permitting_price:,.0f}', align_right=True)  # Total - right aligned
         
-        # Calculate and fill SWMP Subtotal (Row 4)
-        price1A = float(services.get('price1A', 0)) if services.get('include1A') and services.get('price1A') else 0
-        price1B = float(services.get('price1B', 0)) if services.get('include1B') and services.get('price1B') else 0
-        permitting_price = float(services.get('permittingPrice', 0)) if services.get('includePermitting') and services.get('permittingPrice') else 0
-        swmp_subtotal = price1A + price1B + permitting_price
-        
-        if len(swmp_rows) > 4:
-            cells = swmp_rows[4].getElementsByTagName('w:tc')
-            if len(cells) >= 5:
-                set_cell_text(cells[4], f'${swmp_subtotal:,.0f}', align_right=True)  # Subtotal
-        
-        # TABLE 3: Inspection Services (Items 2A, 2B, 2C)
-        inspection_table = tables[2]
-        inspection_rows = inspection_table.getElementsByTagName('w:tr')
-        print(f"DEBUG: Table 3 (inspections) has {len(inspection_rows)} rows")
+      
+    # TABLE 3: Per-Inspection Pricing (Items 2A, 2B, Subtotal, Item 3 Flat Monthly)
+        per_inspection_table = tables[2]
+        per_inspection_rows = per_inspection_table.getElementsByTagName('w:tr')
+        print(f"DEBUG: Table 3 (per-inspection) has {len(per_inspection_rows)} rows")
         
         # Row 1 (2A): Routine Inspections
         routine = services.get('routine', {})
-        if routine and len(inspection_rows) > 1:
-            cells = inspection_rows[1].getElementsByTagName('w:tc')
+        if routine:
+            cells = per_inspection_rows[1].getElementsByTagName('w:tc')
             if len(cells) >= 5:
                 set_cell_text(cells[2], routine.get('qty', ''), align_right=True)
                 set_cell_text(cells[3], f"${routine.get('rate', 0):,.0f}", align_right=True)
@@ -484,121 +474,143 @@ def generate_proposal_docx(quote_data):
         
         # Row 2 (2B): Post-Storm Inspections
         storm = services.get('postStorm', {})
-        if storm and len(inspection_rows) > 2:
-            cells = inspection_rows[2].getElementsByTagName('w:tc')
+        if storm:
+            cells = per_inspection_rows[2].getElementsByTagName('w:tc')
             if len(cells) >= 5:
                 set_cell_text(cells[2], storm.get('qty', ''), align_right=True)
                 set_cell_text(cells[3], f"${storm.get('rate', 0):,.0f}", align_right=True)
                 set_cell_text(cells[4], f"${storm.get('total', 0):,.0f}", align_right=True)
         
-        # Row 3 (2C): Post-Construction Inspections
+        # Row 3: Per-Inspection Subtotal (Routine + Post-Storm)
+        routine_total = routine.get('total', 0) if routine else 0
+        storm_total = storm.get('total', 0) if storm else 0
+        per_inspection_subtotal = routine_total + storm_total
+        
+        if len(per_inspection_rows) > 3:
+            cells = per_inspection_rows[3].getElementsByTagName('w:tc')
+            if len(cells) >= 5:
+                set_cell_text(cells[4], f"${per_inspection_subtotal:,.0f}", align_right=True)
+        
+        # Row 4 (Item 3): Flat Monthly Rate
+        # Calculate: per_inspection_rate × 1.1 × multiplier
+        per_inspection_rate = routine.get('rate', 0) if routine else 0
+        weekly_inspections = quote_data.get('weeklyInspections', False)
+        construction_months = float(quote_data.get('constructionMonths', 0))
+        
+        multiplier = 5.0 if weekly_inspections else 2.5
+        flat_monthly_rate = per_inspection_rate * 1.1 * multiplier
+        flat_monthly_total = flat_monthly_rate * construction_months
+        
+        if len(per_inspection_rows) > 4:
+            cells = per_inspection_rows[4].getElementsByTagName('w:tc')
+            if len(cells) >= 5:
+                set_cell_text(cells[2], str(int(construction_months)), align_right=True)  # Quantity = months
+                set_cell_text(cells[3], f"${flat_monthly_rate:,.0f}", align_right=True)  # Monthly rate
+                set_cell_text(cells[4], f"${flat_monthly_total:,.0f}", align_right=True)  # Total
+        
+        # TABLE 4: Post-Construction (Item 4) - was 2C
+        post_construction_table = tables[3]
+        post_construction_rows = post_construction_table.getElementsByTagName('w:tr')
+        
+        # Row 1 (Item 4): Post-Construction Inspections
         post = services.get('postConstruction', {})
-        if post and len(inspection_rows) > 3:
-            cells = inspection_rows[3].getElementsByTagName('w:tc')
+        post_total = 0
+        if post:
+            cells = post_construction_rows[1].getElementsByTagName('w:tc')
             if len(cells) >= 5:
                 set_cell_text(cells[2], post.get('qty', ''), align_right=True)
                 set_cell_text(cells[3], f"${post.get('rate', 0):,.0f}", align_right=True)
                 set_cell_text(cells[4], f"${post.get('total', 0):,.0f}", align_right=True)
+            post_total = post.get('total', 0)
         
-        # Calculate inspection subtotal
-        routine_total = routine.get('total', 0) if routine else 0
-        storm_total = storm.get('total', 0) if storm else 0
-        post_total = post.get('total', 0) if post else 0
-        inspection_subtotal = routine_total + storm_total + post_total
-        
-        # Row 4: Inspection Subtotal
-        if len(inspection_rows) > 4:
-            cells = inspection_rows[4].getElementsByTagName('w:tc')
+        # Row 2: Post-Construction Subtotal
+        if len(post_construction_rows) > 2:
+            cells = post_construction_rows[2].getElementsByTagName('w:tc')
             if len(cells) >= 5:
-                set_cell_text(cells[4], f"${inspection_subtotal:,.0f}", align_right=True)
+                set_cell_text(cells[4], f"${post_total:,.0f}", align_right=True)
         
-        # TABLE 4: Other Services (Items 4, 5)
-        other_table = tables[3]
+        # TABLE 5: Other Services (Items 5, 6) - were Items 4, 5
+        other_table = tables[4]
         other_rows = other_table.getElementsByTagName('w:tr')
         
-        # Row 1 (Item 4)
-        if services.get('include4'):
-            price4 = float(services.get('price4', 0)) if services.get('price4') else 0
-            table_desc4 = services.get('tableDescription4', '')
-            if len(other_rows) > 1:
-                cells = other_rows[1].getElementsByTagName('w:tc')
-                if len(cells) >= 5:
-                    # Fill description in column 1
-                    if table_desc4:
-                        set_cell_text(cells[1], table_desc4)
-                    set_cell_text(cells[2], '1', align_right=True)  # Quantity
-                    set_cell_text(cells[3], f'${price4:,.0f}', align_right=True)  # Rate
-                    set_cell_text(cells[4], f'${price4:,.0f}', align_right=True)  # Total
-        
-        # Row 2 (Item 5)
+        # Row 1 (Item 5): was Item 4
         if services.get('include5'):
             price5 = float(services.get('price5', 0)) if services.get('price5') else 0
             table_desc5 = services.get('tableDescription5', '')
+            if len(other_rows) > 1:
+                cells = other_rows[1].getElementsByTagName('w:tc')
+                if len(cells) >= 5:
+                    if table_desc5:
+                        set_cell_text(cells[1], table_desc5)
+                    set_cell_text(cells[2], '1', align_right=True)
+                    set_cell_text(cells[3], f'${price5:,.0f}', align_right=True)
+                    set_cell_text(cells[4], f'${price5:,.0f}', align_right=True)
+        
+        # Row 2 (Item 6): was Item 5
+        if services.get('include6'):
+            price6 = float(services.get('price6', 0)) if services.get('price6') else 0
+            table_desc6 = services.get('tableDescription6', '')
             if len(other_rows) > 2:
                 cells = other_rows[2].getElementsByTagName('w:tc')
                 if len(cells) >= 5:
-                    # Fill description in column 1
-                    if table_desc5:
-                        set_cell_text(cells[1], table_desc5)
-                    set_cell_text(cells[2], '1', align_right=True)  # Quantity
-                    set_cell_text(cells[3], f'${price5:,.0f}', align_right=True)  # Rate
-                    set_cell_text(cells[4], f'${price5:,.0f}', align_right=True)  # Total
+                    if table_desc6:
+                        set_cell_text(cells[1], table_desc6)
+                    set_cell_text(cells[2], '1', align_right=True)
+                    set_cell_text(cells[3], f'${price6:,.0f}', align_right=True)
+                    set_cell_text(cells[4], f'${price6:,.0f}', align_right=True)
         
         # Calculate and fill Other Services Subtotal (Row 3)
-        price4 = float(services.get('price4', 0)) if services.get('include4') and services.get('price4') else 0
         price5 = float(services.get('price5', 0)) if services.get('include5') and services.get('price5') else 0
-        other_subtotal = price4 + price5
+        price6 = float(services.get('price6', 0)) if services.get('include6') and services.get('price6') else 0
+        other_subtotal = price5 + price6
         
         if len(other_rows) > 3:
             cells = other_rows[3].getElementsByTagName('w:tc')
             if len(cells) >= 5:
-                set_cell_text(cells[4], f'${other_subtotal:,.0f}', align_right=True)  # Subtotal
+                set_cell_text(cells[4], f'${other_subtotal:,.0f}', align_right=True)
         
-        # TABLE 5: Project Total
-        total_table = tables[4]
-        total_rows = total_table.getElementsByTagName('w:tr')
-        if len(total_rows) > 1:
-            cells = total_rows[1].getElementsByTagName('w:tc')
+        # TABLE 6: Option 1 Total (Per-Inspection Pricing)
+        option1_table = tables[5]
+        option1_rows = option1_table.getElementsByTagName('w:tr')
+        
+        option1_total = swmp_subtotal + per_inspection_subtotal + post_total + other_subtotal
+        
+        if len(option1_rows) > 1:
+            cells = option1_rows[1].getElementsByTagName('w:tc')
             if len(cells) >= 3:
-                project_total = quote_data.get('projectTotal', 0)
-                set_cell_text(cells[2], f"${project_total:,.0f}", align_right=True)
+                set_cell_text(cells[2], f"${option1_total:,.0f}", align_right=True)
         
-        # Fill descriptions in SCOPE OF WORK DESCRIPTION section
-        all_paras = doc.getElementsByTagName('w:p')
+        # TABLE 7: Option 2 Total (Flat Monthly Rate)
+        option2_table = tables[6]
+        option2_rows = option2_table.getElementsByTagName('w:tr')
         
-        # Find the SCOPE OF WORK DESCRIPTION section
-        scope_para_index = None
-        for i, para in enumerate(all_paras):
-            texts = para.getElementsByTagName('w:t')
-            text_content = ''.join([t.firstChild.nodeValue if t.firstChild else '' for t in texts])
-            
-            if 'SCOPE OF WORK DESCRIPTION' in text_content:
-                scope_para_index = i
-                break
+        option2_total = swmp_subtotal + flat_monthly_total + other_subtotal
         
-        if scope_para_index is not None:
-            # Collect all descriptions to add (only if they have content)
-            descriptions_to_add = []
-            
-            if services.get('include1A') and services.get('description1A'):
-                descriptions_to_add.append(('1.A', services.get('description1A')))
-            
-            if services.get('include1B') and services.get('description1B'):
-                descriptions_to_add.append(('1.B', services.get('description1B')))
-            
-            if services.get('includePermitting') and services.get('permittingDescription'):
-                descriptions_to_add.append(('1.C', services.get('permittingDescription')))
-            
-            # Only add Item 4 if scopeDescription4 is provided
-            if services.get('include4') and services.get('scopeDescription4'):
-                descriptions_to_add.append(('4', services.get('scopeDescription4')))
-            
-            # Only add Item 5 if scopeDescription5 is provided
-            if services.get('include5') and services.get('scopeDescription5'):
-                descriptions_to_add.append(('5', services.get('scopeDescription5')))
-            
-            # Add each description to consecutive paragraphs
-            for idx, (item_num, description) in enumerate(descriptions_to_add):
+        if len(option2_rows) > 1:
+            cells = option2_rows[1].getElementsByTagName('w:tc')
+            if len(cells) >= 3:
+                set_cell_text(cells[2], f"${option2_total:,.0f}", align_right=True)
+        
+        print(f"DEBUG: Option 1 Total (Per-Inspection): ${option1_total:,.0f}")
+        print(f"DEBUG: Option 2 Total (Flat Monthly): ${option2_total:,.0f}")
+        print(f"DEBUG: Flat Monthly Rate: ${flat_monthly_rate:,.0f}/month × {int(construction_months)} months")
+
+# === END REPLACEMENT CODE ===
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                 para_offset = scope_para_index + 1 + idx
                 if para_offset < len(all_paras):
                     target_para = all_paras[para_offset]
