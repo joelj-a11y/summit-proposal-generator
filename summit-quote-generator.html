@@ -1928,7 +1928,7 @@ function StormwaterQuoteGenerator() {
                         weeklyInspections: formData.weeklyInspections,
                         flatRateBiWeeklyMultiplier: parseFloat(formData.flatRateBiWeeklyMultiplier) || 2.5,
                         flatRateWeeklyMultiplier: parseFloat(formData.flatRateWeeklyMultiplier) || 5.0,
-                        closestInspector: quote.closestInspector.name,
+                        closestInspector: quote.Inspector.name,
                         services: {
                           include1A: formData.include1A,
                           price1A: formData.price1A,
@@ -1977,7 +1977,7 @@ function StormwaterQuoteGenerator() {
                       const url = URL.createObjectURL(blob);
                       const link = document.createElement('a');
                       link.href = url;
-                      const inspectorLastName = quote.closestInspector.name.split(' ').pop();
+                      const inspectorLastName = quote.Inspector.name.split(' ').pop();
                       const sanitize = (str) => str.replace(/[^a-zA-Z0-9]/g, '_');
                       link.download = `${sanitize(formData.clientName)}_${sanitize(formData.projectName)}_${sanitize(inspectorLastName)}_Quote.json`;
                       document.body.appendChild(link);
