@@ -353,7 +353,7 @@ def generate_proposal_docx(quote_data):
         # Check if template exists
         template_path = 'Summit_Proposal_Template.docx'
         if not os.path.exists(template_path):
-            raise Exception("Template file not found. Please upload Enhanced_Pricing_Template_v3.docx to the repository.")
+            raise Exception("Template file not found. Please upload Summit_Proposal_Template.docx to the repository.")
         
         # Create temp directory
         template_dir = tempfile.mkdtemp()
@@ -507,7 +507,10 @@ def generate_proposal_docx(quote_data):
         weekly_inspections = quote_data.get('weeklyInspections', False)
         construction_months = float(quote_data.get('constructionMonths', 0))
         
-        multiplier = 5.0 if weekly_inspections else 2.5
+        # Get custom multipliers from JSON (with fallback to defaults)
+        bi_weekly_mult = float(quote_data.get('flatRateBiWeeklyMultiplier', 2.5))
+        weekly_mult = float(quote_data.get('flatRateWeeklyMultiplier', 5.0))
+        multiplier = weekly_mult if weekly_inspections else bi_weekly_mult
         flat_monthly_rate = per_inspection_rate * 1.1 * multiplier
         flat_monthly_total = flat_monthly_rate * construction_months
         
