@@ -618,7 +618,7 @@ def generate_proposal_docx(quote_data):
             texts = para.getElementsByTagName('w:t')
             text_content = ''.join([t.firstChild.nodeValue if t.firstChild else '' for t in texts])
             
-            if 'SCOPE OF WORK DESCRIPTION' in text_content:
+            if 'Scope of Work descriptions' in text_content:
                 scope_para_index = i
                 break
         
