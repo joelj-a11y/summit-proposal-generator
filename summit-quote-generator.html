@@ -1908,8 +1908,11 @@ function StormwaterQuoteGenerator() {
                   <button 
                     className="button" 
                     onClick={() => {
+                      // Debug: Check what's in quote
+                      console.log('Full quote object:', quote);
+                      console.log('Inspector data:', quote.inspector);
                       // Prepare quote data for proposal generation
-                      const quoteData = {
+                        const quoteData = {
                         clientName: formData.clientName,
                         projectName: formData.projectName,
                         projectAddress: formData.projectAddress,
