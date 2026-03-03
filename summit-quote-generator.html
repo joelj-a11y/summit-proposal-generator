@@ -1979,7 +1979,8 @@ function StormwaterQuoteGenerator() {
                       const url = URL.createObjectURL(blob);
                       const link = document.createElement('a');
                       link.href = url;
-                      const inspectorLastName = quote.Inspector.name.split(' ').pop();
+                      const inspectorName = quote.inspector?.name || quote.closestInspector?.name || 'Inspector';
+                      const inspectorLastName = inspectorName.split(' ').pop();
                       const sanitize = (str) => str.replace(/[^a-zA-Z0-9]/g, '_');
                       link.download = `${sanitize(formData.clientName)}_${sanitize(formData.projectName)}_${sanitize(inspectorLastName)}_Quote.json`;
                       document.body.appendChild(link);
