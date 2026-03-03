@@ -511,6 +511,7 @@ def generate_proposal_docx(quote_data):
         bi_weekly_mult = float(quote_data.get('flatRateBiWeeklyMultiplier', 2.5))
         weekly_mult = float(quote_data.get('flatRateWeeklyMultiplier', 5.0))
         multiplier = weekly_mult if weekly_inspections else bi_weekly_mult
+        
         flat_monthly_rate = per_inspection_rate * 1.1 * multiplier
         flat_monthly_total = flat_monthly_rate * construction_months
         
