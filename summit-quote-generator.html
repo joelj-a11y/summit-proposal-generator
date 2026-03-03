@@ -1,0 +1,1981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summit Inspection Quote Generator</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+
+const { useState, useEffect } = React;
+
+
+function StormwaterQuoteGenerator() {
+  // Inspector data with coordinates (excluding office staff)
+  const inspectors = [
+    { name: "Allison Blyton", address: "392 Audrey Dr, Loveland, CO 80537", lat: 40.3978, lon: -105.0750 },
+    { name: "Anthony Cipperly", address: "PO Box 253221 W 5th St., Palisade, CO 81526", lat: 39.1103, lon: -108.3517 },
+    { name: "Britlyn R Romero", address: "530 N Cherry St, Fruita, CO 81521", lat: 39.1592, lon: -108.7289 },
+    { name: "Brooks M Bosco", address: "1860 Golden Ranch Rd, Fruita, CO 81521", lat: 39.1592, lon: -108.7289 },
+    { name: "Camden J. Sherrill", address: "2763 Compass Dr Apt 205, Grand Junction, CO 81506", lat: 39.0639, lon: -108.5506 },
+    { name: "Daniel C Kintz", address: "436 Montero Street, Grand Junction, CO 81507", lat: 39.0639, lon: -108.5506 },
+    { name: "Daniel Peterson", address: "3501 Stanford Rd Apt 113, Fort Collins, CO 80525", lat: 40.5853, lon: -105.0844 },
+    { name: "Dustin M Graf", address: "820 Mease Rd, Grand Junction, CO 81505", lat: 39.0639, lon: -108.5506 },
+    { name: "Haley Hinger", address: "850 Sir Galahad Dr Apt B, Lafayette, CO 80026", lat: 39.9936, lon: -105.0897 },
+    { name: "Jesse R Tietz", address: "532 Kirby Dr, Grand Junction, CO 81504", lat: 39.0639, lon: -108.5506 },
+    { name: "Katherine Bergen", address: "909 Venice St Apt B, Longmont, CO 80501", lat: 40.1672, lon: -105.1019 },
+    { name: "Matthew T Fought", address: "220 Alcove Dr, Grand Junction, CO 81507", lat: 39.0639, lon: -108.5506 },
+    { name: "Max Hall", address: "2775 Oro Blanco Dr, Colorado Springs, CO 80917", lat: 38.8339, lon: -104.8214 },
+    { name: "Natasha N Jennings", address: "424 Pisces Circle, Fruita, CO 81521", lat: 39.1592, lon: -108.7289 },
+    { name: "Rebekah Adams", address: "200 Rood Ave Apt 2224, Grand Junction, CO 81501", lat: 39.0639, lon: -108.5506 },
+    { name: "Robert Kyle West", address: "117 Bristlecone Circle, Bailey, CO 80421", lat: 39.4081, lon: -105.4769 },
+    { name: "Roxanne L Fromang", address: "3864 County Road 2, Rangely, CO 81648", lat: 40.0875, lon: -108.8048 },
+    { name: "Skyler E. Pixley", address: "1507 Bradley Dr, Boulder, CO 80305", lat: 40.0150, lon: -105.2705 },
+    { name: "Stefan P Majewski", address: "2601 W Front View CresApt 206, Denver, CO 80202", lat: 39.7539, lon: -105.0047 },
+    { name: "Travis Williams", address: "1103 Claremont Drive, Fruita, CO 81521", lat: 39.1592, lon: -108.7289 }
+  ];
+
+  // Rate sheet pricing tiers for comparison
+  const rateSheetTiers = [
+    { min: 0, max: 1, price: 105, label: "Less than 1 acre" },
+    { min: 1, max: 2, price: 125, label: "1-2 acres" },
+    { min: 2, max: 4, price: 140, label: "2-4 acres" },
+    { min: 4, max: 5, price: 140, label: "4-5 acres" },
+    { min: 5, max: 10, price: 170, label: "5-10 acres" },
+    { min: 10, max: 25, price: 200, label: "10-25 acres" },
+    { min: 25, max: 50, price: 230, label: "25-50 acres" },
+    { min: 50, max: 75, price: 260, label: "50-75 acres" }
+  ];
+
+  const [formData, setFormData] = useState({
+    siteContactName: '',
+    siteContactEmail: '',
+    siteContactPhone: '',
+    summitContact: '',
+    summitEmail: '',
+    summitPhone: '',
+    clientName: '',
+    projectName: '',
+    projectCity: '',
+    projectCounty: '',
+    projectAddress: '',
+    projectCoords: '',
+    projectLat: '',
+    projectLon: '',
+    disturbedAcres: '',
+    projectType: 'Residential',
+    constructionMonths: '',
+    postConstructionMonths: '',
+    weeklyInspections: false,
+    includePermitting: false,
+    permittingPrice: '',
+    permittingDescription: '',
+    include1A: false,
+    price1A: '',
+    description1A: '',
+    include1B: false,
+    price1B: '',
+    description1B: '',
+    include5: false,
+    price5: '',
+    tableDescription5: '',
+    scopeDescription5: '',
+    include6: false,
+    price6: '',
+    tableDescription6: '',
+    scopeDescription6: '',
+    hourlyRate: '100',
+    postConstructionPercent: '85',
+    manualRoutineRate: '',
+    manualPostConstructionRate: '',
+    flatRateBiWeeklyMultiplier: '2.5',
+    flatRateWeeklyMultiplier: '5.0'
+  });
+
+  const [calculating, setCalculating] = useState(false);
+  const [quote, setQuote] = useState(null);
+  const [error, setError] = useState('');
+  const [geocoding, setGeocoding] = useState(false);
+
+  // Recalculate project totals when rates are manually changed
+  React.useEffect(() => {
+    if (!quote) return;
+    
+    // Use final rates (manual override or calculated)
+    const routineRate = quote.calculated.finalRoutineRate || quote.calculated.total;
+    const postConstructionRate = quote.calculated.finalPostConstructionRate || quote.calculated.postConstruction;
+    
+    const inspectionsPerMonth = formData.weeklyInspections ? 4 : 2;
+    const constructionMonths = parseFloat(formData.constructionMonths) || 0;
+    const postConstructionMonths = parseFloat(formData.postConstructionMonths) || 0;
+    
+    const totalRoutineInspections = inspectionsPerMonth * constructionMonths;
+    const totalPostConstructionInspections = postConstructionMonths;
+    const totalPostStormInspections = Math.ceil(0.6 * constructionMonths);
+    
+    const routineInspectionsTotal = totalRoutineInspections * routineRate;
+    const postConstructionInspectionsTotal = totalPostConstructionInspections * postConstructionRate;
+    const postStormInspectionsTotal = totalPostStormInspections * routineRate;
+    const inspectionsSubtotal = routineInspectionsTotal + postConstructionInspectionsTotal + postStormInspectionsTotal;
+    
+    const permittingTotal = formData.includePermitting ? (parseFloat(formData.permittingPrice) || 0) : 0;
+    const total1A = formData.include1A ? (parseFloat(formData.price1A) || 0) : 0;
+    const total1B = formData.include1B ? (parseFloat(formData.price1B) || 0) : 0;
+    const total5 = formData.include5 ? (parseFloat(formData.price5) || 0) : 0;
+    const total6 = formData.include6 ? (parseFloat(formData.price6) || 0) : 0;
+    const projectTotal = inspectionsSubtotal + permittingTotal + total1A + total1B + total5 + total6;
+    
+    setQuote(prev => ({
+      ...prev,
+      projectTotals: {
+        ...prev.projectTotals,
+        routineInspectionsTotal,
+        postConstructionInspectionsTotal,
+        postStormInspectionsTotal,
+        inspectionsSubtotal,
+        projectTotal
+      }
+    }));
+  }, [quote?.calculated.finalRoutineRate, quote?.calculated.finalPostConstructionRate, formData.manualRoutineRate, formData.manualPostConstructionRate, formData.weeklyInspections, formData.constructionMonths, formData.postConstructionMonths, formData.includePermitting, formData.permittingPrice, formData.include1A, formData.price1A, formData.include1B, formData.price1B, formData.include5, formData.price5, formData.include6, formData.price6]);
+
+  const duplicateForNewGC = () => {
+    // Keep all project data, clear only client/contact info
+    setFormData(prev => ({
+      ...prev,
+      siteContactName: '',
+      siteContactEmail: '',
+      siteContactPhone: '',
+      clientName: ''
+    }));
+    
+    // Clear the current quote to show the form
+    setQuote(null);
+    
+    // Scroll to top of form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const projectTypes = [
+    'Residential',
+    'Commercial',
+    'Multi-Family',
+    'Transmission Line',
+    'Pipeline',
+    'Highway'
+  ];
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCheckboxChange = (e) => {
+    const { name, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: checked
+    }));
+  };
+
+  // Parse coordinates from Google Maps format (e.g., "39.7392, -104.9903")
+  const handleCoordsChange = async (e) => {
+    const coords = e.target.value;
+    setFormData(prev => ({ ...prev, projectCoords: coords }));
+
+    // Try to parse lat/long
+    const match = coords.match(/([-+]?\d+\.?\d*)\s*,\s*([-+]?\d+\.?\d*)/);
+    if (match) {
+      const lat = parseFloat(match[1]);
+      const lon = parseFloat(match[2]);
+      
+      // Validate coordinates are reasonable for US
+      if (lat >= 24 && lat <= 50 && lon >= -125 && lon <= -65) {
+        setFormData(prev => ({
+          ...prev,
+          projectLat: lat,
+          projectLon: lon
+        }));
+        
+        // Clear any previous error
+        setError('');
+      } else {
+        setError('⚠️ Coordinates appear to be outside the US.');
+      }
+    }
+  };
+
+  // Haversine formula for straight-line distance
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 3959; // Earth's radius in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const findNearestInspector = (projectLat, projectLon) => {
+    let minDistance = Infinity;
+    let nearestInspector = null;
+
+    inspectors.forEach(inspector => {
+      const distance = calculateDistance(
+        inspector.lat, 
+        inspector.lon, 
+        parseFloat(projectLat), 
+        parseFloat(projectLon)
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestInspector = inspector;
+      }
+    });
+
+    return {
+      inspector: nearestInspector,
+      oneWayDistance: minDistance,
+      roundTripDistance: minDistance * 2
+    };
+  };
+
+  const getInspectionTimeForAcres = (acres, projectType) => {
+    const acreNum = parseFloat(acres);
+    let baseTime;
+    
+    if (acreNum < 5) baseTime = 0.5;
+    else if (acreNum < 10) baseTime = 0.65;
+    else if (acreNum < 25) baseTime = 1.0;
+    else if (acreNum < 50) baseTime = 1.5;
+    else if (acreNum < 75) baseTime = 2.0;
+    else return null; // Manual entry needed for 75+
+    
+    // Add 20% for linear projects (Transmission Line, Pipeline, Highway)
+    const linearProjects = ['Transmission Line', 'Pipeline', 'Highway'];
+    if (linearProjects.includes(projectType)) {
+      baseTime = baseTime * 1.2;
+    }
+    
+    return baseTime;
+  };
+
+  const getRateSheetPrice = (acres) => {
+    const acreNum = parseFloat(acres);
+    
+    for (let tier of rateSheetTiers) {
+      if (acreNum >= tier.min && acreNum < tier.max) {
+        return { price: tier.price, tier: tier.label };
+      }
+    }
+    
+    if (acreNum >= 75) {
+      return { price: null, tier: "Over 75 acres - Custom Quote" };
+    }
+    
+    return { price: null, tier: "Unknown" };
+  };
+
+  const generateQuote = async () => {
+    setError('');
+    setCalculating(true);
+
+    try {
+      // Validate required fields
+      const requiredFields = [
+        { field: 'summitContact', label: 'Summit Contact Name' },
+        { field: 'summitEmail', label: 'Summit Email' },
+        { field: 'summitPhone', label: 'Summit Phone' },
+        { field: 'clientName', label: 'Client Name' },
+        { field: 'projectName', label: 'Project Name' },
+        { field: 'projectLat', label: 'Project Coordinates' },
+        { field: 'projectLon', label: 'Project Coordinates' },
+        { field: 'disturbedAcres', label: 'Disturbed Acres' },
+        { field: 'constructionMonths', label: 'Active Construction Duration' }
+      ];
+
+      const missingFields = [];
+      for (const { field, label } of requiredFields) {
+        if (!formData[field] || formData[field] === '') {
+          missingFields.push(label);
+        }
+      }
+
+      if (missingFields.length > 0) {
+        throw new Error(`Please fill in required fields:\n• ${missingFields.join('\n• ')}`);
+      }
+
+      if (!formData.projectLat || !formData.projectLon || !formData.disturbedAcres) {
+        throw new Error('Please fill in project coordinates and disturbed acres');
+      }
+
+      const inspectionTimeHours = getInspectionTimeForAcres(formData.disturbedAcres, formData.projectType);
+      
+      if (inspectionTimeHours === null) {
+        throw new Error('For projects over 75 acres, please contact us for a custom quote');
+      }
+
+      // Find nearest inspector
+      const { inspector, oneWayDistance, roundTripDistance } = findNearestInspector(
+        formData.projectLat,
+        formData.projectLon
+      );
+
+      // Calculate drive time (assuming 45 mph average)
+      const avgSpeed = 45; // mph
+      
+      // Use one-way for <50 miles, round-trip for 50+ miles
+      const distanceForCalculation = oneWayDistance < 50 ? oneWayDistance : roundTripDistance;
+      const driveTimeHours = distanceForCalculation / avgSpeed;
+
+      // CALCULATED PRICING - use editable hourly rate
+      const hourlyRate = parseFloat(formData.hourlyRate) || 100;
+      const adminCost = 50;
+      const driveCost = driveTimeHours * hourlyRate;
+      const inspectionCost = inspectionTimeHours * hourlyRate;
+      const calculatedSubtotal = adminCost + driveCost + inspectionCost;
+      
+      // Round up to nearest $5
+      const calculatedTotal = Math.ceil(calculatedSubtotal / 5) * 5;
+      
+      // Determine final rates - use manual if provided, otherwise use calculated
+      let finalRoutineRate;
+      let finalPostConstructionRate;
+      
+      if (formData.manualRoutineRate && parseFloat(formData.manualRoutineRate) > 0) {
+        // Use manual override
+        finalRoutineRate = parseFloat(formData.manualRoutineRate);
+        finalPostConstructionRate = parseFloat(formData.manualPostConstructionRate) || Math.ceil((finalRoutineRate * 0.85) / 5) * 5;
+      } else {
+        // Use calculated rates
+        finalRoutineRate = calculatedTotal;
+        const postConstructionPercent = parseFloat(formData.postConstructionPercent) || 85;
+        finalPostConstructionRate = Math.ceil((calculatedTotal * (postConstructionPercent / 100)) / 5) * 5;
+      }
+
+      // Calculate project totals using final rates
+      const inspectionsPerMonth = formData.weeklyInspections ? 4 : 2;
+      const constructionMonths = parseFloat(formData.constructionMonths) || 0;
+      const postConstructionMonths = parseFloat(formData.postConstructionMonths) || 0;
+      
+      const totalRoutineInspections = inspectionsPerMonth * constructionMonths;
+      const totalPostConstructionInspections = postConstructionMonths; // 1 per month
+      
+      // Post-storm event inspections: 0.6 per month during construction, rounded up
+      const postStormRate = finalRoutineRate; // Same as routine rate
+      const totalPostStormInspections = Math.ceil(0.6 * constructionMonths);
+      
+      const routineInspectionsTotal = totalRoutineInspections * finalRoutineRate;
+      const postConstructionInspectionsTotal = totalPostConstructionInspections * finalPostConstructionRate;
+      const postStormInspectionsTotal = totalPostStormInspections * postStormRate;
+      const inspectionsSubtotal = routineInspectionsTotal + postConstructionInspectionsTotal + postStormInspectionsTotal;
+      
+      // Stormwater Permitting Assistance - custom price if selected
+      const permittingTotal = formData.includePermitting ? (parseFloat(formData.permittingPrice) || 0) : 0;
+      const total1A = formData.include1A ? (parseFloat(formData.price1A) || 0) : 0;
+      const total1B = formData.include1B ? (parseFloat(formData.price1B) || 0) : 0;
+      const total5 = formData.include5 ? (parseFloat(formData.price5) || 0) : 0;
+      const total6 = formData.include6 ? (parseFloat(formData.price6) || 0) : 0;
+      
+      // Project total includes inspections + optional services
+      const projectTotal = inspectionsSubtotal + permittingTotal + total1A + total1B + total5 + total6;
+
+      // RATE SHEET COMPARISON
+      const rateSheetData = getRateSheetPrice(formData.disturbedAcres);
+
+      // Calculate difference
+      const difference = rateSheetData.price ? calculatedTotal - rateSheetData.price : null;
+      const percentDiff = rateSheetData.price ? ((difference / rateSheetData.price) * 100) : null;
+
+      setQuote({
+        calculated: {
+          admin: adminCost,
+          driveTimeHours: driveTimeHours,
+          driveCost: driveCost,
+          inspectionTimeHours: inspectionTimeHours,
+          inspectionCost: inspectionCost,
+          subtotal: calculatedSubtotal,
+          total: calculatedTotal,
+          postConstruction: Math.ceil((calculatedTotal * 0.85) / 5) * 5,
+          finalRoutineRate: finalRoutineRate,
+          finalPostConstructionRate: finalPostConstructionRate
+        },
+        projectTotals: {
+          inspectionsPerMonth: inspectionsPerMonth,
+          constructionMonths: constructionMonths,
+          postConstructionMonths: postConstructionMonths,
+          totalRoutineInspections: totalRoutineInspections,
+          totalPostConstructionInspections: totalPostConstructionInspections,
+          totalPostStormInspections: totalPostStormInspections,
+          routineInspectionsTotal: routineInspectionsTotal,
+          postConstructionInspectionsTotal: postConstructionInspectionsTotal,
+          postStormInspectionsTotal: postStormInspectionsTotal,
+          inspectionsSubtotal: inspectionsSubtotal,
+          marTotal: marTotal,
+          permittingTotal: permittingTotal,
+          projectTotal: projectTotal
+        },
+        rateSheet: {
+          price: rateSheetData.price,
+          tier: rateSheetData.tier,
+          postConstruction: rateSheetData.price ? Math.round(rateSheetData.price * 0.85) : null
+        },
+        comparison: {
+          difference: difference,
+          percentDiff: percentDiff
+        },
+        inspector: inspector,
+        distance: {
+          oneWay: oneWayDistance,
+          roundTrip: roundTripDistance,
+          usedForCalculation: distanceForCalculation,
+          calculationMethod: oneWayDistance < 50 ? 'one-way' : 'round-trip'
+        },
+        projectInfo: formData
+      });
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
+      fontFamily: '"Archivo", -apple-system, sans-serif',
+      padding: '40px 20px'
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+        
+        * {
+          box-sizing: border-box;
+        }
+
+        .container {
+          max-width: 1400px;
+          margin: 0 auto;
+        }
+
+        .header {
+          text-align: center;
+          margin-bottom: 60px;
+          color: white;
+        }
+
+        .header h1 {
+          font-size: 48px;
+          font-weight: 700;
+          margin: 0 0 16px 0;
+          letter-spacing: -0.02em;
+          background: linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        .header p {
+          font-size: 18px;
+          color: rgba(255, 255, 255, 0.7);
+          font-family: 'Space Mono', monospace;
+        }
+
+        .card {
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 24px;
+          padding: 40px;
+          margin-bottom: 24px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+          font-size: 24px;
+          font-weight: 600;
+          color: white;
+          margin: 0 0 24px 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 20px;
+          margin-bottom: 24px;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .form-group label {
+          font-size: 14px;
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.9);
+          font-family: 'Space Mono', monospace;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .form-group input,
+        .form-group select {
+          padding: 14px 16px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 12px;
+          color: white;
+          font-size: 16px;
+          font-family: 'Archivo', sans-serif;
+          transition: all 0.3s ease;
+        }
+
+        .form-group select option {
+          background: #1a2332;
+          color: white;
+          padding: 12px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+          outline: none;
+          background: rgba(255, 255, 255, 0.12);
+          border-color: #00d4ff;
+          box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        .form-group input::placeholder {
+          color: rgba(255, 255, 255, 0.4);
+        }
+
+        .info-box {
+          background: rgba(0, 212, 255, 0.1);
+          border: 1px solid rgba(0, 212, 255, 0.3);
+          border-radius: 16px;
+          padding: 20px;
+          margin-bottom: 24px;
+          color: rgba(255, 255, 255, 0.8);
+          font-size: 14px;
+          line-height: 1.6;
+        }
+
+        .info-box strong {
+          color: #00d4ff;
+          display: block;
+          margin-bottom: 8px;
+        }
+
+        .info-box a {
+          color: #00d4ff;
+          text-decoration: none;
+        }
+
+        .button {
+          padding: 16px 32px;
+          background: linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%);
+          border: none;
+          border-radius: 12px;
+          color: white;
+          font-size: 16px;
+          font-weight: 600;
+          font-family: 'Archivo', sans-serif;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.3s ease;
+          box-shadow: 0 8px 24px rgba(123, 47, 247, 0.3);
+        }
+
+        .button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 32px rgba(123, 47, 247, 0.4);
+        }
+
+        .button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .quote-results {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 24px;
+          margin-bottom: 24px;
+        }
+
+        @media (max-width: 1024px) {
+          .quote-results {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        .breakdown-card {
+          background: rgba(0, 212, 255, 0.05);
+          border: 1px solid rgba(0, 212, 255, 0.2);
+          border-radius: 16px;
+          padding: 24px;
+        }
+
+        .breakdown-card h3 {
+          font-size: 18px;
+          font-weight: 600;
+          color: #00d4ff;
+          margin: 0 0 20px 0;
+          font-family: 'Space Mono', monospace;
+        }
+
+        .breakdown-item {
+          display: flex;
+          justify-content: space-between;
+          padding: 12px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          color: rgba(255, 255, 255, 0.8);
+          font-size: 14px;
+        }
+
+        .breakdown-item:last-child {
+          border-bottom: none;
+          padding-top: 16px;
+          margin-top: 8px;
+          font-size: 18px;
+          font-weight: 700;
+          color: white;
+        }
+
+        .breakdown-item .label {
+          font-family: 'Space Mono', monospace;
+        }
+
+        .breakdown-item .value {
+          font-weight: 600;
+        }
+
+        .comparison-card {
+          background: rgba(255, 193, 7, 0.05);
+          border: 1px solid rgba(255, 193, 7, 0.3);
+          border-radius: 16px;
+          padding: 24px;
+        }
+
+        .comparison-card h3 {
+          font-size: 18px;
+          font-weight: 600;
+          color: #ffc107;
+          margin: 0 0 20px 0;
+          font-family: 'Space Mono', monospace;
+        }
+
+        .comparison-highlight {
+          background: rgba(255, 193, 7, 0.1);
+          border-radius: 12px;
+          padding: 16px;
+          margin: 12px 0;
+          text-align: center;
+        }
+
+        .comparison-highlight .diff-label {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.6);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-bottom: 8px;
+        }
+
+        .comparison-highlight .diff-value {
+          font-size: 32px;
+          font-weight: 700;
+          color: white;
+        }
+
+        .comparison-highlight .diff-percent {
+          font-size: 16px;
+          color: rgba(255, 255, 255, 0.7);
+          margin-top: 4px;
+        }
+
+        .comparison-highlight.positive {
+          border: 2px solid rgba(244, 67, 54, 0.5);
+        }
+
+        .comparison-highlight.negative {
+          border: 2px solid rgba(76, 175, 80, 0.5);
+        }
+
+        .client-card {
+          background: linear-gradient(135deg, rgba(123, 47, 247, 0.2) 0%, rgba(0, 212, 255, 0.2) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 16px;
+          padding: 32px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+        }
+
+        .client-card h3 {
+          font-size: 16px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.7);
+          margin: 0 0 12px 0;
+          font-family: 'Space Mono', monospace;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+
+        .client-card .price {
+          font-size: 56px;
+          font-weight: 700;
+          color: white;
+          margin: 0 0 8px 0;
+          letter-spacing: -0.02em;
+        }
+
+        .client-card .subtitle {
+          font-size: 14px;
+          color: rgba(255, 255, 255, 0.6);
+          margin: 0 0 24px 0;
+        }
+
+        .client-card .post-construction {
+          padding-top: 24px;
+          border-top: 1px solid rgba(255, 255, 255, 0.2);
+          width: 100%;
+        }
+
+        .client-card .post-construction-label {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.5);
+          margin: 0 0 8px 0;
+          font-family: 'Space Mono', monospace;
+          text-transform: uppercase;
+        }
+
+        .client-card .post-construction-price {
+          font-size: 32px;
+          font-weight: 700;
+          color: #00d4ff;
+        }
+
+        .error-message {
+          background: rgba(244, 67, 54, 0.1);
+          border: 1px solid rgba(244, 67, 54, 0.3);
+          border-radius: 12px;
+          padding: 16px;
+          color: #ff6b6b;
+          margin-bottom: 24px;
+          font-size: 14px;
+        }
+
+        .warning-message {
+          background: rgba(255, 193, 7, 0.1);
+          border: 1px solid rgba(255, 193, 7, 0.3);
+          border-radius: 12px;
+          padding: 12px 16px;
+          color: #ffc107;
+          margin-top: 12px;
+          font-size: 13px;
+        }
+
+        .inspector-info {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 12px;
+          padding: 16px;
+          margin-bottom: 24px;
+          color: rgba(255, 255, 255, 0.8);
+          font-size: 14px;
+        }
+
+        .inspector-info strong {
+          color: white;
+          font-family: 'Space Mono', monospace;
+        }
+      `}</style>
+
+      <div className="container">
+        <div className="header">
+          <img 
+            src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/4Q0RaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLwA8P3hwYWNrZXQgYmVnaW49Iu+7vyIgaWQ9Ilc1TTBNcENlaGlIenJlU3pOVGN6a2M5ZCI/Pgo8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJBZG9iZSBYTVAgQ29yZSA1LjItYzAwMSA2My4xMzk0MzksIDIwMTAvMTAvMTItMDg6NDU6MzAgICAgICAgICI+CiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiCiAgICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgICB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyIKICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIgogICB0aWZmOk5hdGl2ZURpZ2VzdD0iMjU2LDI1NywyNTgsMjU5LDI2MiwyNzQsMjc3LDI4NCw1MzAsNTMxLDI4MiwyODMsMjk2LDMwMSwzMTgsMzE5LDUyOSw1MzIsMzA2LDI3MCwyNzEsMjcyLDMwNSwzMTUsMzM0MzI7RDQxRDhDRDk4RjAwQjIwNEU5ODAwOTk4RUNGODQyN0UiCiAgIGV4aWY6TmF0aXZlRGlnZXN0PSIzNjg2NCw0MDk2MCw0MDk2MSwzNzEyMSwzNzEyMiw0MDk2Miw0MDk2MywzNzUxMCw0MDk2NCwzNjg2NywzNjg2OCwzMzQzNCwzMzQzNywzNDg1MCwzNDg1MiwzNDg1NSwzNDg1NiwzNzM3NywzNzM3OCwzNzM3OSwzNzM4MCwzNzM4MSwzNzM4MiwzNzM4MywzNzM4NCwzNzM4NSwzNzM4NiwzNzM5Niw0MTQ4Myw0MTQ4NCw0MTQ4Niw0MTQ4Nyw0MTQ4OCw0MTQ5Miw0MTQ5Myw0MTQ5NSw0MTcyOCw0MTcyOSw0MTczMCw0MTk4NSw0MTk4Niw0MTk4Nyw0MTk4OCw0MTk4OSw0MTk5MCw0MTk5MSw0MTk5Miw0MTk5Myw0MTk5NCw0MTk5NSw0MTk5Niw0MjAxNiwwLDIsNCw1LDYsNyw4LDksMTAsMTEsMTIsMTMsMTQsMTUsMTYsMTcsMTgsMjAsMjIsMjMsMjQsMjUsMjYsMjcsMjgsMzA7RDQxRDhDRDk4RjAwQjIwNEU5ODAwOTk4RUNGODQyN0UiPgogICA8ZGM6c3ViamVjdD4KICAgIDxyZGY6QmFnPgogICAgIDxyZGY6bGk+SW4gRm9jdXM8L3JkZjpsaT4KICAgICA8cmRmOmxpPlRvbyBCcmlnaHQ8L3JkZjpsaT4KICAgICA8cmRmOmxpPkhpZ2ggQ29udHJhc3Q8L3JkZjpsaT4KICAgICA8cmRmOmxpPk1lZGl1bSBRdWFsaXR5PC9yZGY6bGk+CiAgICA8L3JkZjpCYWc+CiAgIDwvZGM6c3ViamVjdD4KICA8L3JkZjpEZXNjcmlwdGlvbj4KIDwvcmRmOlJERj4KPC94OnhtcG1ldGE+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAKPD94cGFja2V0IGVuZD0idyI/Pv/sABFEdWNreQABAAQAAAA8AAD/7QCAUGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAEgcAgAAAgACHAIZAAhJbiBGb2N1cxwCGQAKVG9vIEJyaWdodBwCGQANSGlnaCBDb250cmFzdBwCGQAOTWVkaXVtIFF1YWxpdHk4QklNBCUAAAAAABCK+PAvEtVjZPq4IszxZ5ZN/+4ADkFkb2JlAGTAAAAAAf/bAIQABgQEBAUEBgUFBgkGBQYJCwgGBggLDAoKCwoKDBAMDAwMDAwQDA4PEA8ODBMTFBQTExwbGxscHx8fHx8fHx8f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"
+            alt="Summit Services Group Logo"
+            style={{
+              maxWidth: '300px',
+              height: 'auto',
+              marginBottom: '20px'
+            }}
+          />
+          <h1>Summit Inspection Quote Generator</h1>
+          <p>Calculated pricing with rate sheet comparison</p>
+        </div>
+
+        <div className="card">
+          <div className="info-box">
+            <strong>📍 How to Get Project Coordinates:</strong>
+            1. Go to <a href="https://www.google.com/maps" target="_blank">Google Maps</a><br/>
+            2. Find your project location<br/>
+            3. Right-click on the location and click the coordinates at the top<br/>
+            4. Paste directly into the "Project Coordinates" field below<br/>
+            5. City, county, and address will auto-fill!
+          </div>
+
+          <h2>📄 Project Information</h2>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Summit Contact Name *</label>
+              <input
+                type="text"
+                name="summitContact"
+                value={formData.summitContact}
+                onChange={handleInputChange}
+                placeholder="Your Name"
+              />
+            </div>
+            <div className="form-group">
+              <label>Summit Email *</label>
+              <input
+                type="email"
+                name="summitEmail"
+                value={formData.summitEmail}
+                onChange={handleInputChange}
+                placeholder="you@summitservicesgroup.com"
+              />
+            </div>
+            <div className="form-group">
+              <label>Summit Phone *</label>
+              <input
+                type="tel"
+                name="summitPhone"
+                value={formData.summitPhone}
+                onChange={handleInputChange}
+                placeholder="(555) 123-4567"
+              />
+            </div>
+            <div className="form-group">
+              <label>Site Contact Name</label>
+              <input
+                type="text"
+                name="siteContactName"
+                value={formData.siteContactName}
+                onChange={handleInputChange}
+                placeholder="John Doe"
+              />
+            </div>
+            <div className="form-group">
+              <label>Site Contact Email</label>
+              <input
+                type="email"
+                name="siteContactEmail"
+                value={formData.siteContactEmail}
+                onChange={handleInputChange}
+                placeholder="john@example.com"
+              />
+            </div>
+            <div className="form-group">
+              <label>Site Contact Phone</label>
+              <input
+                type="tel"
+                name="siteContactPhone"
+                value={formData.siteContactPhone}
+                onChange={handleInputChange}
+                placeholder="(555) 123-4567"
+              />
+            </div>
+            <div className="form-group">
+              <label>Client Name *</label>
+              <input
+                type="text"
+                name="clientName"
+                value={formData.clientName}
+                onChange={handleInputChange}
+                placeholder="ABC Construction"
+              />
+            </div>
+            <div className="form-group">
+              <label>Project Name *</label>
+              <input
+                type="text"
+                name="projectName"
+                value={formData.projectName}
+                onChange={handleInputChange}
+                placeholder="Mountain View Development"
+              />
+            </div>
+            <div className="form-group">
+              <label>Project Type</label>
+              <select
+                name="projectType"
+                value={formData.projectType}
+                onChange={handleInputChange}
+              >
+                {projectTypes.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <h2>📍 Location</h2>
+          <div className="form-grid">
+            <div className="form-group" style={{gridColumn: '1 / -1'}}>
+              <label>Project Coordinates * (Paste from Google Maps)</label>
+              <input
+                type="text"
+                name="projectCoords"
+                value={formData.projectCoords}
+                onChange={handleCoordsChange}
+                placeholder="39.7392, -104.9903"
+              />
+              <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginTop: '4px'}}>
+                Paste coordinates, then manually enter city/county below
+              </div>
+              {error && error.includes('address') && (
+                <div className="warning-message" style={{marginTop: '8px', marginBottom: '0'}}>
+                  {error}
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>City *</label>
+              <input
+                type="text"
+                name="projectCity"
+                value={formData.projectCity}
+                onChange={handleInputChange}
+                placeholder="Auto-filled or enter manually"
+              />
+            </div>
+            <div className="form-group">
+              <label>County *</label>
+              <input
+                type="text"
+                name="projectCounty"
+                value={formData.projectCounty}
+                onChange={handleInputChange}
+                placeholder="Auto-filled or enter manually"
+              />
+            </div>
+            <div className="form-group" style={{gridColumn: '1 / -1'}}>
+              <label>Street Address</label>
+              <input
+                type="text"
+                name="projectAddress"
+                value={formData.projectAddress}
+                onChange={handleInputChange}
+                placeholder="Auto-filled or enter manually"
+              />
+            </div>
+          </div>
+
+          <h2>🧮 Project Details</h2>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Disturbed Acres *</label>
+              <input
+                type="number"
+                name="disturbedAcres"
+                value={formData.disturbedAcres}
+                onChange={handleInputChange}
+                placeholder="15.5"
+                step="0.1"
+                min="0"
+              />
+            </div>
+            <div className="form-group">
+              <label>Hourly Rate ($/hr) *</label>
+              <input
+                type="number"
+                name="hourlyRate"
+                value={formData.hourlyRate}
+                onChange={handleInputChange}
+                placeholder="100"
+                step="1"
+                min="0"
+              />
+              <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginTop: '4px'}}>
+                Default: $100/hr (for drive time & inspection time)
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Post-Construction Rate (%)</label>
+              <input
+                type="number"
+                name="postConstructionPercent"
+                value={formData.postConstructionPercent}
+                onChange={handleInputChange}
+                placeholder="85"
+                step="1"
+                min="0"
+                max="100"
+              />
+              <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginTop: '4px'}}>
+                Default: 85% of routine inspection rate
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Active Construction Duration (months) *</label>
+              <input
+                type="number"
+                name="constructionMonths"
+                value={formData.constructionMonths}
+                onChange={handleInputChange}
+                placeholder="12"
+                step="1"
+                min="0"
+              />
+            </div>
+            <div className="form-group">
+              <label>Post-Construction Duration (months)</label>
+              <input
+                type="number"
+                name="postConstructionMonths"
+                value={formData.postConstructionMonths}
+                onChange={handleInputChange}
+                placeholder="6"
+                step="1"
+                min="0"
+              />
+            </div>
+          </div>
+
+          <h2>💼 Optional Services</h2>
+          <div style={{
+            background: 'rgba(255, 193, 7, 0.1)',
+            border: '2px solid rgba(255, 193, 7, 0.3)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px'
+          }}>
+            
+            <div style={{marginBottom: '20px'}}>
+              <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: '600'}}>
+                <input
+                  type="checkbox"
+                  name="include1A"
+                  checked={formData.include1A}
+                  onChange={handleCheckboxChange}
+                  style={{width: 'auto', cursor: 'pointer', transform: 'scale(1.2)'}}
+                />
+                <span>Item 1A - SWMP Narrative</span>
+              </label>
+              <div style={{fontSize: '13px', color: '#ffffff', fontWeight: '500', marginTop: '8px', marginLeft: '28px'}}>
+                Stormwater Management Plan written narrative
+              </div>
+              
+              {formData.include1A && (
+                <div style={{marginTop: '12px', marginLeft: '28px', display: 'grid', gap: '12px'}}>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Price *
+                    </label>
+                    <input
+                      type="number"
+                      name="price1A"
+                      value={formData.price1A}
+                      onChange={handleInputChange}
+                      placeholder="Enter price (e.g., 500)"
+                      style={{
+                        width: '200px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Description (optional)
+                    </label>
+                    <textarea
+                      name="description1A"
+                      value={formData.description1A}
+                      onChange={handleInputChange}
+                      placeholder="Describe the SWMP narrative services..."
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{marginBottom: '20px'}}>
+              <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: '600'}}>
+                <input
+                  type="checkbox"
+                  name="include1B"
+                  checked={formData.include1B}
+                  onChange={handleCheckboxChange}
+                  style={{width: 'auto', cursor: 'pointer', transform: 'scale(1.2)'}}
+                />
+                <span>Item 1B - SWMP Site Plan (Map)</span>
+              </label>
+              <div style={{fontSize: '13px', color: '#ffffff', fontWeight: '500', marginTop: '8px', marginLeft: '28px'}}>
+                Stormwater Management Plan site map
+              </div>
+              
+              {formData.include1B && (
+                <div style={{marginTop: '12px', marginLeft: '28px', display: 'grid', gap: '12px'}}>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Price *
+                    </label>
+                    <input
+                      type="number"
+                      name="price1B"
+                      value={formData.price1B}
+                      onChange={handleInputChange}
+                      placeholder="Enter price (e.g., 750)"
+                      style={{
+                        width: '200px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Description (optional)
+                    </label>
+                    <textarea
+                      name="description1B"
+                      value={formData.description1B}
+                      onChange={handleInputChange}
+                      placeholder="Describe the site plan services..."
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{marginBottom: '20px'}}>
+              <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: '600'}}>
+                <input
+                  type="checkbox"
+                  name="weeklyInspections"
+                  checked={formData.weeklyInspections}
+                  onChange={handleCheckboxChange}
+                  style={{width: 'auto', cursor: 'pointer', transform: 'scale(1.2)'}}
+                />
+                <span>Weekly Inspections (default is bi-weekly)</span>
+              </label>
+              <div style={{fontSize: '13px', color: '#ffffff', fontWeight: '500', marginTop: '8px', marginLeft: '28px'}}>
+                {formData.weeklyInspections ? '✓ 4 inspections per month' : '2 inspections per month (default)'}
+              </div>
+            </div>
+
+            <div>
+              <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: '600'}}>
+                <input
+                  type="checkbox"
+                  name="includePermitting"
+                  checked={formData.includePermitting}
+                  onChange={handleCheckboxChange}
+                  style={{width: 'auto', cursor: 'pointer', transform: 'scale(1.2)'}}
+                />
+                <span>Include Stormwater Permitting Assistance</span>
+              </label>
+              <div style={{fontSize: '13px', color: '#ffffff', fontWeight: '500', marginTop: '8px', marginLeft: '28px'}}>
+                Custom pricing based on project requirements
+              </div>
+              
+              {formData.includePermitting && (
+                <div style={{marginTop: '12px', marginLeft: '28px', display: 'grid', gap: '12px'}}>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Permitting Price *
+                    </label>
+                    <input
+                      type="number"
+                      name="permittingPrice"
+                      value={formData.permittingPrice}
+                      onChange={handleInputChange}
+                      placeholder="Enter price (e.g., 500)"
+                      style={{
+                        width: '200px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Description (optional)
+                    </label>
+                    <textarea
+                      name="permittingDescription"
+                      value={formData.permittingDescription}
+                      onChange={handleInputChange}
+                      placeholder="Describe the permitting services (e.g., CWA, SWMP, NOI preparation...)"
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{marginBottom: '20px'}}>
+              <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: '600'}}>
+                <input
+                  type="checkbox"
+                  name="include5"
+                  checked={formData.include5}
+                  onChange={handleCheckboxChange}
+                  style={{width: 'auto', cursor: 'pointer', transform: 'scale(1.2)'}}
+                />
+                <span>Item 5 - Additional Service</span>
+              </label>
+              <div style={{fontSize: '13px', color: '#ffffff', fontWeight: '500', marginTop: '8px', marginLeft: '28px'}}>
+                Custom service or add-on
+              </div>
+              
+              {formData.include5 && (
+                <div style={{marginTop: '12px', marginLeft: '28px', display: 'grid', gap: '12px'}}>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Price *
+                    </label>
+                    <input
+                      type="number"
+                      name="price5"
+                      value={formData.price5}
+                      onChange={handleInputChange}
+                      placeholder="Enter price"
+                      style={{
+                        width: '200px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Table Description *
+                    </label>
+                    <textarea
+                      name="tableDescription5"
+                      value={formData.tableDescription5}
+                      onChange={handleInputChange}
+                      placeholder="Brief description for pricing table..."
+                      rows="2"
+                      style={{
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Scope of Work Detail (optional)
+                    </label>
+                    <textarea
+                      name="scopeDescription5"
+                      value={formData.scopeDescription5}
+                      onChange={handleInputChange}
+                      placeholder="Detailed scope description (optional - will appear in SCOPE OF WORK section)..."
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: '600'}}>
+                <input
+                  type="checkbox"
+                  name="include6"
+                  checked={formData.include6}
+                  onChange={handleCheckboxChange}
+                  style={{width: 'auto', cursor: 'pointer', transform: 'scale(1.2)'}}
+                />
+                <span>Item 6 - Additional Service</span>
+              </label>
+              <div style={{fontSize: '13px', color: '#ffffff', fontWeight: '500', marginTop: '8px', marginLeft: '28px'}}>
+                Custom service or add-on
+              </div>
+              
+              {formData.include6 && (
+                <div style={{marginTop: '12px', marginLeft: '28px', display: 'grid', gap: '12px'}}>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Price *
+                    </label>
+                    <input
+                      type="number"
+                      name="price6"
+                      value={formData.price6}
+                      onChange={handleInputChange}
+                      placeholder="Enter price"
+                      style={{
+                        width: '200px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Table Description *
+                    </label>
+                    <textarea
+                      name="tableDescription6"
+                      value={formData.tableDescription6}
+                      onChange={handleInputChange}
+                      placeholder="Brief description for pricing table..."
+                      rows="2"
+                      style={{
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px'}}>
+                      Scope of Work Detail (optional)
+                    </label>
+                    <textarea
+                      name="scopeDescription6"
+                      value={formData.scopeDescription6}
+                      onChange={handleInputChange}
+                      placeholder="Detailed scope description (optional - will appear in SCOPE OF WORK section)..."
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Flat Rate Calculation Settings */}
+          <div style={{marginTop: '24px', padding: '20px', background: 'rgba(52, 152, 219, 0.15)', borderRadius: '12px', border: '2px solid rgba(52, 152, 219, 0.3)'}}>
+            <h3 style={{fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px'}}>
+              ⚙️ Flat Rate Calculation Settings
+            </h3>
+            <div style={{fontSize: '13px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '16px'}}>
+              Customize multipliers for flat monthly rate calculations (typically 2.5 for bi-weekly, 5.0 for weekly)
+            </div>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
+              <div>
+                <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px', color: '#ffffff'}}>
+                  Bi-Weekly Multiplier
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  name="flatRateBiWeeklyMultiplier"
+                  value={formData.flatRateBiWeeklyMultiplier}
+                  onChange={handleInputChange}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    borderRadius: '8px',
+                    color: 'white'
+                  }}
+                />
+                <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px'}}>
+                  Default: 2.5
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px', color: '#ffffff'}}>
+                  Weekly Multiplier
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  name="flatRateWeeklyMultiplier"
+                  value={formData.flatRateWeeklyMultiplier}
+                  onChange={handleInputChange}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    borderRadius: '8px',
+                    color: 'white'
+                  }}
+                />
+                <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px'}}>
+                  Default: 5.0
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {error && !error.includes('address') && <div className="error-message">{error}</div>}
+
+          <button 
+            className="button" 
+            onClick={generateQuote}
+            disabled={calculating}
+          >
+            {calculating ? (
+              <>Calculating...</>
+            ) : (
+              <>
+                💰
+                Generate Quote
+                →
+              </>
+            )}
+          </button>
+        </div>
+
+        {quote && (
+          <>
+            <div className="card">
+              {quote.inspector && (
+                <div className="inspector-info">
+                  <strong>Nearest Inspector:</strong> {quote.inspector.name}<br />
+                  <strong>One-Way Distance:</strong> {quote.distance.oneWay.toFixed(1)} miles (straight-line)<br />
+                  <strong>Round-Trip Distance:</strong> {quote.distance.roundTrip.toFixed(1)} miles<br />
+                  <strong>Drive Time Calculation:</strong> Using {quote.distance.calculationMethod} distance ({quote.distance.usedForCalculation.toFixed(1)} miles) at 45 mph avg = {(quote.calculated.driveTimeHours * 60).toFixed(0)} minutes
+                </div>
+              )}
+
+              <div className="quote-results">
+                <div className="breakdown-card">
+                  <h3>🧮 Calculated Price</h3>
+                  <div className="breakdown-item">
+                    <span className="label">Admin Time</span>
+                    <span className="value">${quote.calculated.admin.toFixed(2)}</span>
+                  </div>
+                  <div className="breakdown-item">
+                    <span className="label">Drive Time ({quote.calculated.driveTimeHours.toFixed(2)} hrs @ ${formData.hourlyRate}/hr)</span>
+                    <span className="value">${quote.calculated.driveCost.toFixed(2)}</span>
+                  </div>
+                  <div className="breakdown-item">
+                    <span className="label">Inspection ({quote.calculated.inspectionTimeHours.toFixed(2)} hrs @ ${formData.hourlyRate}/hr){['Transmission Line', 'Pipeline', 'Highway'].includes(quote.projectInfo.projectType) ? ' +20%' : ''}</span>
+                    <span className="value">${quote.calculated.inspectionCost.toFixed(2)}</span>
+                  </div>
+                  <div className="breakdown-item" style={{borderBottom: '1px solid rgba(255,255,255,0.1)', paddingTop: '12px', marginTop: '0', fontSize: '14px', fontWeight: '400'}}>
+                    <span className="label">Subtotal</span>
+                    <span className="value">${quote.calculated.subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="breakdown-item">
+                    <span className="label">Rounded to nearest $5</span>
+                    <span className="value">${quote.calculated.total.toFixed(0)}</span>
+                  </div>
+                </div>
+
+                <div className="comparison-card">
+                  <h3>📊 Rate Sheet Comparison</h3>
+                  <div className="breakdown-item">
+                    <span className="label">Rate Sheet Tier</span>
+                    <span className="value">{quote.rateSheet.tier}</span>
+                  </div>
+                  <div className="breakdown-item">
+                    <span className="label">Rate Sheet Price</span>
+                    <span className="value">${quote.rateSheet.price}</span>
+                  </div>
+                  
+                  {quote.comparison.difference !== null && (
+                    <div className={`comparison-highlight ${quote.comparison.difference > 0 ? 'positive' : 'negative'}`}>
+                      <div className="diff-label">Difference</div>
+                      <div className="diff-value">
+                        {quote.comparison.difference > 0 ? '+' : ''}${quote.comparison.difference.toFixed(2)}
+                      </div>
+                      <div className="diff-percent">
+                        ({quote.comparison.percentDiff > 0 ? '+' : ''}{quote.comparison.percentDiff.toFixed(1)}%)
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div style={{marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.7)'}}>
+                    {quote.comparison.difference !== null && Math.abs(quote.comparison.percentDiff) < 10 ? (
+                      '✅ Close match! Calculated price aligns well with rate sheet.'
+                    ) : quote.comparison.difference > 0 ? (
+                      '⚠️ Calculated price is higher than rate sheet. Consider using rate sheet price or adjusting quote.'
+                    ) : (
+                      '⚠️ Calculated price is lower than rate sheet. You may be underpricing this project.'
+                    )}
+                  </div>
+                </div>
+
+                <div className="client-card">
+                  <h3>💼 Recommended Quote</h3>
+                  
+                  {/* Manual Rate Override Section */}
+                  <div style={{marginBottom: '24px', padding: '16px', background: 'rgba(241, 196, 15, 0.1)', borderRadius: '8px', border: '2px solid rgba(241, 196, 15, 0.3)'}}>
+                    <h4 style={{fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#ffffff'}}>
+                      💰 Override Inspection Rates (Optional)
+                    </h4>
+                    <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '12px'}}>
+                      Leave blank to use calculated rates. Post-construction auto-updates to 85% of routine rate.
+                    </div>
+                    <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
+                      <div>
+                        <label style={{fontSize: '13px', fontWeight: '500', display: 'block', marginBottom: '4px', color: '#ffffff'}}>
+                          Manual Routine Rate
+                        </label>
+                        <input
+                          type="number"
+                          name="manualRoutineRate"
+                          value={formData.manualRoutineRate}
+                          onChange={(e) => {
+                            handleInputChange(e);
+                            // Auto-update post-construction rate
+                            const newRoutineRate = parseFloat(e.target.value) || 0;
+                            if (newRoutineRate > 0) {
+                              const newPostConstRate = Math.ceil((newRoutineRate * 0.85) / 5) * 5;
+                              setFormData(prev => ({
+                                ...prev,
+                                manualPostConstructionRate: newPostConstRate.toString()
+                              }));
+                            } else {
+                              setFormData(prev => ({
+                                ...prev,
+                                manualPostConstructionRate: ''
+                              }));
+                            }
+                          }}
+                          placeholder={`Calculated: $${quote.calculated.total}`}
+                          style={{
+                            width: '100%',
+                            padding: '8px',
+                            fontSize: '14px',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            color: 'white'
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{fontSize: '13px', fontWeight: '500', display: 'block', marginBottom: '4px', color: '#ffffff'}}>
+                          Post-Construction Rate (Auto)
+                        </label>
+                        <input
+                          type="number"
+                          name="manualPostConstructionRate"
+                          value={formData.manualPostConstructionRate}
+                          readOnly
+                          placeholder={`Calculated: $${quote.calculated.postConstruction}`}
+                          style={{
+                            width: '100%',
+                            padding: '8px',
+                            fontSize: '14px',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            background: '#2c3e50',
+                            color: '#00d4ff',
+                            cursor: 'not-allowed'
+                          }}
+                        />
+                        <div style={{fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '2px'}}>
+                          85% of routine, rounded to $5
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Display Active Rates */}
+                  <div style={{marginBottom: '24px'}}>
+                    <div style={{fontSize: '14px', color: 'rgba(255,255,255,0.6)', marginBottom: '8px'}}>
+                      {formData.manualRoutineRate ? 'Manual Override Active' : 'Using Calculated Rates'}
+                    </div>
+                    <div style={{
+                      padding: '12px',
+                      fontSize: '32px',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      background: formData.manualRoutineRate ? 'rgba(241, 196, 15, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                      border: `2px solid ${formData.manualRoutineRate ? 'rgba(241, 196, 15, 0.5)' : 'rgba(255, 255, 255, 0.3)'}`,
+                      borderRadius: '8px',
+                      color: 'white'
+                    }}>
+                      ${(quote.calculated.finalRoutineRate || quote.calculated.total).toFixed(0)}
+                    </div>
+                    <div className="subtitle" style={{marginTop: '8px'}}>Per Inspection (Weekly/Bi-weekly)</div>
+                  </div>
+                  
+                  <div className="post-construction">
+                    <div className="post-construction-label">Post-Construction Monthly</div>
+                    <div style={{
+                      padding: '8px',
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      background: 'rgba(0, 212, 255, 0.1)',
+                      border: '2px solid rgba(0, 212, 255, 0.3)',
+                      borderRadius: '8px',
+                      color: '#00d4ff',
+                      marginTop: '8px'
+                    }}>
+                      ${(quote.calculated.finalPostConstructionRate || quote.calculated.postConstruction).toFixed(0)}
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    marginTop: '16px',
+                    padding: '12px',
+                    background: 'rgba(255, 193, 7, 0.1)',
+                    border: '1px solid rgba(255, 193, 7, 0.3)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.6)',
+                    textAlign: 'left'
+                  }}>
+                    💡 <strong style={{color: '#ffc107'}}>Manual Override:</strong> Click on any rate to edit it for special pricing situations.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {quote.projectTotals && (quote.projectTotals.constructionMonths > 0 || quote.projectTotals.postConstructionMonths > 0) && (
+              <div className="card">
+                <h2>💰 Project Totals</h2>
+                
+                <div style={{
+                  background: 'rgba(0, 212, 255, 0.05)',
+                  border: '1px solid rgba(0, 212, 255, 0.2)',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  marginBottom: '24px'
+                }}>
+                  <h3 style={{
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: '#00d4ff',
+                    margin: '0 0 20px 0',
+                    fontFamily: "'Space Mono', monospace"
+                  }}>Inspections Breakdown</h3>
+                  
+                  {quote.projectTotals.constructionMonths > 0 && (
+                    <>
+                      <div className="breakdown-item">
+                        <span className="label">Active Construction Duration</span>
+                        <span className="value">{quote.projectTotals.constructionMonths} months</span>
+                      </div>
+                      <div className="breakdown-item">
+                        <span className="label">Inspection Frequency</span>
+                        <span className="value">{quote.projectTotals.inspectionsPerMonth}x per month ({formData.weeklyInspections ? 'Weekly' : 'Bi-weekly'})</span>
+                      </div>
+                      <div className="breakdown-item">
+                        <span className="label">Total Routine Inspections</span>
+                        <span className="value">{quote.projectTotals.totalRoutineInspections} @ ${quote.calculated.total} each</span>
+                      </div>
+                      <div className="breakdown-item" style={{borderBottom: 'none', paddingBottom: '12px'}}>
+                        <span className="label">Routine Inspections Subtotal</span>
+                        <span className="value" style={{fontSize: '18px', fontWeight: '700', color: 'white'}}>${quote.projectTotals.routineInspectionsTotal.toLocaleString()}</span>
+                      </div>
+                      
+                      <div className="breakdown-item" style={{borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', marginTop: '12px'}}>
+                        <span className="label">Post-Storm Event Inspections</span>
+                        <span className="value">{quote.projectTotals.totalPostStormInspections} @ ${quote.calculated.total} each</span>
+                      </div>
+                      <div className="breakdown-item" style={{borderBottom: 'none', paddingBottom: '12px', fontSize: '13px', color: 'rgba(255,255,255,0.6)'}}>
+                        <span className="label">(0.6 events/month × {quote.projectTotals.constructionMonths} months, rounded up)</span>
+                        <span className="value" style={{fontSize: '18px', fontWeight: '700', color: 'white'}}>${quote.projectTotals.postStormInspectionsTotal.toLocaleString()}</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {quote.projectTotals.postConstructionMonths > 0 && (
+                    <>
+                      <div className="breakdown-item" style={{borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', marginTop: '12px'}}>
+                        <span className="label">Post-Construction Duration</span>
+                        <span className="value">{quote.projectTotals.postConstructionMonths} months</span>
+                      </div>
+                      <div className="breakdown-item">
+                        <span className="label">Inspection Frequency</span>
+                        <span className="value">1x per month (every 28 days)</span>
+                      </div>
+                      <div className="breakdown-item">
+                        <span className="label">Total Post-Construction Inspections</span>
+                        <span className="value">{quote.projectTotals.totalPostConstructionInspections} @ ${quote.calculated.postConstruction} each</span>
+                      </div>
+                      <div className="breakdown-item" style={{borderBottom: 'none', paddingBottom: '12px'}}>
+                        <span className="label">Post-Construction Subtotal</span>
+                        <span className="value" style={{fontSize: '18px', fontWeight: '700', color: 'white'}}>${quote.projectTotals.postConstructionInspectionsTotal.toLocaleString()}</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  <div className="breakdown-item" style={{
+                    borderTop: '2px solid rgba(0, 212, 255, 0.5)',
+                    paddingTop: '20px',
+                    marginTop: '16px',
+                    fontSize: '20px',
+                    fontWeight: '700'
+                  }}>
+                    <span className="label">INSPECTIONS SUBTOTAL</span>
+                    <span className="value">${quote.projectTotals.inspectionsSubtotal.toLocaleString()}</span>
+                  </div>
+                  
+                  {quote.projectTotals.permittingTotal > 0 && (
+                    <div style={{
+                      background: 'rgba(255, 193, 7, 0.1)',
+                      border: '1px solid rgba(255, 193, 7, 0.3)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      marginTop: '20px'
+                    }}>
+                      <div className="breakdown-item" style={{padding: '0', borderBottom: 'none'}}>
+                        <span className="label">Stormwater Permitting Assistance</span>
+                        <span className="value">1 project @ $300</span>
+                      </div>
+                      <div className="breakdown-item" style={{padding: '8px 0 0 0', borderBottom: 'none', fontSize: '18px', fontWeight: '700'}}>
+                        <span className="label">Permitting Subtotal</span>
+                        <span className="value">${quote.projectTotals.permittingTotal.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="breakdown-item" style={{
+                    background: 'linear-gradient(135deg, rgba(123, 47, 247, 0.2) 0%, rgba(0, 212, 255, 0.2) 100%)',
+                    border: '2px solid rgba(0, 212, 255, 0.5)',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginTop: '20px',
+                    fontSize: '24px',
+                    fontWeight: '700'
+                  }}>
+                    <span className="label">TOTAL PROJECT PRICE</span>
+                    <span className="value">${quote.projectTotals.projectTotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {quote && (
+              <div className="card">
+                <h2 style={{marginBottom: '24px'}}>📄 Next Steps</h2>
+                <div style={{display: 'flex', gap: '16px', flexWrap: 'wrap'}}>
+                  <button 
+                    className="button" 
+                    onClick={duplicateForNewGC}
+                    style={{flex: '1', minWidth: '250px'}}
+                  >
+                    📄
+                    Duplicate for Another GC
+                  </button>
+                  <button 
+                    className="button" 
+                    onClick={() => {
+                      // Prepare quote data for proposal generation
+                      const quoteData = {
+                        clientName: formData.clientName,
+                        projectName: formData.projectName,
+                        projectAddress: formData.projectAddress,
+                        projectCity: formData.projectCity,
+                        projectCounty: formData.projectCounty,
+                        projectType: formData.projectType,
+                        disturbedAcres: formData.disturbedAcres,
+                        siteContactName: formData.siteContactName,
+                        siteContactEmail: formData.siteContactEmail,
+                        siteContactPhone: formData.siteContactPhone,
+                        summitContact: formData.summitContact,
+                        summitEmail: formData.summitEmail,
+                        summitPhone: formData.summitPhone,
+                        constructionMonths: formData.constructionMonths,
+                        weeklyInspections: formData.weeklyInspections,
+                        flatRateBiWeeklyMultiplier: parseFloat(formData.flatRateBiWeeklyMultiplier) || 2.5,
+                        flatRateWeeklyMultiplier: parseFloat(formData.flatRateWeeklyMultiplier) || 5.0,
+                        closestInspector: quote.closestInspector.name,
+                        services: {
+                          include1A: formData.include1A,
+                          price1A: formData.price1A,
+                          description1A: formData.description1A,
+                          include1B: formData.include1B,
+                          price1B: formData.price1B,
+                          description1B: formData.description1B,
+                          includePermitting: formData.includePermitting,
+                          permittingPrice: formData.permittingPrice,
+                          permittingDescription: formData.permittingDescription,
+                          include5: formData.include5,
+                          price5: formData.price5,
+                          tableDescription5: formData.tableDescription5,
+                          scopeDescription5: formData.scopeDescription5,
+                          include6: formData.include6,
+                          price6: formData.price6,
+                          tableDescription6: formData.tableDescription6,
+                          scopeDescription6: formData.scopeDescription6,
+                          routine: {
+                            qty: quote.projectTotals.totalRoutineInspections,
+                            rate: quote.calculated.finalRoutineRate || quote.calculated.total,
+                            total: quote.projectTotals.routineInspectionsTotal
+                          },
+                          postStorm: {
+                            qty: quote.projectTotals.totalPostStormInspections,
+                            rate: quote.calculated.finalRoutineRate || quote.calculated.total,
+                            total: quote.projectTotals.postStormInspectionsTotal
+                          },
+                          postConstruction: {
+                            qty: quote.projectTotals.totalPostConstructionInspections,
+                            rate: quote.calculated.finalPostConstructionRate || quote.calculated.postConstruction,
+                            total: quote.projectTotals.postConstructionInspectionsTotal
+                          }
+                        },
+                        projectTotal: quote.projectTotals.projectTotal
+                      };
+                      
+                      // Create downloadable file with inspector name in filename
+                      const jsonString = JSON.stringify(quoteData, null, 2);
+                      const blob = new Blob([jsonString], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      const inspectorLastName = quote.closestInspector.name.split(' ').pop();
+                      const sanitize = (str) => str.replace(/[^a-zA-Z0-9]/g, '_');
+                      link.download = `${sanitize(formData.clientName)}_${sanitize(formData.projectName)}_${sanitize(inspectorLastName)}_Quote.json`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(url);
+                    }}
+                    style={{
+                      flex: '1',
+                      minWidth: '250px',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)'
+                    }}
+                  >
+                    📄
+                    Download Quote Data
+                    →
+                  </button>
+                </div>
+                <div style={{
+                  marginTop: '16px',
+                  padding: '12px 16px',
+                  background: 'rgba(255, 193, 7, 0.1)',
+                  border: '1px solid rgba(255, 193, 7, 0.3)',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  color: 'rgba(255,255,255,0.7)'
+                }}>
+                  <strong style={{color: '#ffc107'}}>Workflow:</strong> "Duplicate for Another GC" creates more quotes. "Download Quote Data" saves a .json file to send for Word proposal generation.
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<StormwaterQuoteGenerator />);
+    
+    </script>
+</body>
+</html>
