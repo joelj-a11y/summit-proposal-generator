@@ -790,7 +790,12 @@ def generate_proposal():
         mountain_tz = pytz.timezone('America/Denver')
         today = datetime.now(mountain_tz)
         date_str = today.strftime('%Y%m%d')
-        filename = f"{client_name}_{project_name}_{date_str}.docx".replace(' ', '_')
+        inspector_name = quote_data.get('closestInspector', '')
+        inspector_last = inspector_name.split()[-1] if inspector_name else ''
+        if inspector_last:
+            filename = f"{client_name}_{project_name}_{inspector_last}_{date_str}.docx".replace(' ', '_')
+        else:
+            filename = f"{client_name}_{project_name}_{date_str}.docx".replace(' ', '_')
         
         return send_file(
             output_file,
