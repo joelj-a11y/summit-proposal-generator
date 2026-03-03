@@ -1930,7 +1930,7 @@ function StormwaterQuoteGenerator() {
                         weeklyInspections: formData.weeklyInspections,
                         flatRateBiWeeklyMultiplier: parseFloat(formData.flatRateBiWeeklyMultiplier) || 2.5,
                         flatRateWeeklyMultiplier: parseFloat(formData.flatRateWeeklyMultiplier) || 5.0,
-                        closestInspector: quote.Inspector.name,
+                        closestInspector: quote.inspector?.name || quote.closestInspector?.name || 'Unknown',
                         services: {
                           include1A: formData.include1A,
                           price1A: formData.price1A,
