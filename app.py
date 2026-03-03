@@ -677,7 +677,8 @@ def generate_proposal_docx(quote_data):
                     t2.appendChild(doc.createTextNode(description))
                     run2.appendChild(t2)
                     target_para.appendChild(run2)
-        
+        # DEBUG: Print final count
+        print(f"DEBUG: Added {len(descriptions_to_add)} descriptions to SCOPE OF WORK")
         print("DEBUG: Successfully filled all template fields")
         
         # Remove manual page breaks to prevent blank pages
