@@ -625,7 +625,12 @@ def generate_proposal_docx(quote_data):
         if scope_para_index is not None:
             # Collect all descriptions to add (only if they have content)
             descriptions_to_add = []
-            
+            # DEBUG: Print what we're receiving
+            print(f"DEBUG: Services data: {services}")
+            print(f"DEBUG: include1A = {services.get('include1A')}, description = '{services.get('description1A')}'")
+            print(f"DEBUG: include1B = {services.get('include1B')}, description = '{services.get('description1B')}'")
+            print(f"DEBUG: includePermitting = {services.get('includePermitting')}, description = '{services.get('permittingDescription')}'")
+            print(f"DEBUG: Descriptions to add: {len(descriptions_to_add)} items")
             if services.get('include1A') and services.get('description1A'):
                 descriptions_to_add.append(('1.A', services.get('description1A')))
             
