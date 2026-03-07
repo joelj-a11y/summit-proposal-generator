@@ -12,6 +12,8 @@ from datetime import datetime
 import pytz
 from xml.dom import minidom
 import zipfile
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 app = Flask(__name__)
 
@@ -345,6 +347,86 @@ def set_cell_text(cell, text, align_right=False):
     t.appendChild(doc.createTextNode(str(text)))
     run.appendChild(t)
     para.appendChild(run)
+
+def log_to_google_sheets(quote_data):
+    """Log proposal data to Google Sheets"""
+    try:
+        # Load credentials from environment variable
+        creds_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not creds_json:
+            print("WARNING: No Google Sheets credentials found - skipping logging")
+            return
+        
+        # Parse the JSON credentials
+        import json
+        creds_dict = json.loads(creds_json)
+        
+        # Set up credentials
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(credentials)
+        
+        # Open the spreadsheet
+        sheet_id = os.environ.get('GOOGLE_SHEET_ID')
+        if not sheet_id:
+            print("WARNING: No Google Sheet ID found - skipping logging")
+            return
+            
+        sheet = client.open_by_key(sheet_id).sheet1
+        
+        # Get current timestamp in Mountain Time
+        mountain_tz = pytz.timezone('America/Denver')
+        timestamp = datetime.now(mountain_tz).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Extract data from quote_data
+        services = quote_data.get('services', {})
+        
+        # Build services string
+        services_list = []
+        if services.get('include1A'):
+            services_list.append('1A')
+        if services.get('include1B'):
+            services_list.append('1B')
+        if services.get('includePermitting'):
+            services_list.append('Permitting')
+        if services.get('include5'):
+            services_list.append('Item 5')
+        if services.get('include6'):
+            services_list.append('Item 6')
+        services_str = ', '.join(services_list) if services_list else 'Standard Inspection Only'
+        
+        # Prepare row data to match headers:
+        # Timestamp | Client Name | Contact Name | Contact Email | Contact Phone | 
+        # Project Name | Project Address | Closest Inspector | Inspection Frequency | 
+        # Monthly Rate | Annual Rate | Total Inspections Per Year | Services Included | Permitting Included
+        
+        row = [
+            timestamp,
+            quote_data.get('clientName', ''),
+            quote_data.get('contactName', ''),
+            quote_data.get('contactEmail', ''),
+            quote_data.get('contactPhone', ''),
+            quote_data.get('projectName', ''),
+            quote_data.get('projectAddress', ''),
+            quote_data.get('closestInspector', ''),
+            quote_data.get('inspectionFrequency', ''),
+            f"${quote_data.get('monthlyRate', 0):.2f}",
+            f"${quote_data.get('annualRate', 0):.2f}",
+            quote_data.get('totalInspectionsPerYear', 0),
+            services_str,
+            'Yes' if services.get('includePermitting') else 'No'
+        ]
+        
+        # Append the row
+        sheet.append_row(row)
+        print(f"SUCCESS: Logged proposal to Google Sheets for {quote_data.get('clientName', 'Unknown Client')}")
+        
+    except Exception as e:
+        # Don't fail the whole proposal generation if logging fails
+        print(f"ERROR logging to Google Sheets: {e}")
+        import traceback
+        traceback.print_exc()
 
 def generate_proposal_docx(quote_data):
     """Generate Word proposal from quote data"""
@@ -787,6 +869,10 @@ def generate_proposal():
             return jsonify({'error': 'No quote data provided'}), 400
         
         quote_data = json.loads(quote_data_str)
+        # Log to Google Sheets
+        log_to_google_sheets(quote_data)
+
+        # Generate the document
         output_file = generate_proposal_docx(quote_data)
         
         # Generate filename with date
